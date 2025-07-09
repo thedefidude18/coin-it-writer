@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pinata } from '@/lib/pinata';
+import { Metadata } from 'next';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,15 +40,8 @@ export async function POST(request: NextRequest) {
       ],
       // Include the blog content (limited to 100 words)
       content: {
-        original_link: blogData.url,
-        author_name: blogData.author || 'Unknown',
-        title: blogData.title || 'Untitled',
-        content_preview: blogData.content 
-          ? blogData.content.split(' ').slice(0, 100).join(' ') + '...'
-          : 'No content available',
-        full_description: blogData.description || '',
-        tags: blogData.tags || [],
-        scraped_at: blogData.scrapedAt,
+        uri: blogData.url,
+        mime: 'text/html',
       }
     };
 

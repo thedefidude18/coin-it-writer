@@ -6,7 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ExternalLink, Coins, FileText, Calendar, User, Link as LinkIcon } from 'lucide-react';
+import { Loader2, ExternalLink, Coins, FileText, Calendar, User, Link as LinkIcon, Wallet } from 'lucide-react';
+import { createCoin, DeployCurrency, ValidMetadataURI } from "@zoralabs/coins-sdk";
+import { Hex, createWalletClient, createPublicClient, http, Address } from "viem";
+import { base } from "viem/chains";
+import { usePrivy, useLogin, useLogout } from '@privy-io/react-auth';
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 
 interface ScrapedData {
   url: string;
@@ -44,7 +49,16 @@ export default function Home() {
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
   const [coinData, setCoinData] = useState<CoinData | null>(null);
   const [error, setError] = useState('');
-  const [walletAddress, setWalletAddress] = useState('');
+  
+  // Privy hooks
+  const { user, authenticated } = usePrivy();
+  const { login } = useLogin();
+  const { logout } = useLogout();
+  
+  // Wagmi hooks
+  const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
 
   const handleScrape = async () => {
     if (!url) {
@@ -80,8 +94,8 @@ export default function Home() {
   };
 
   const handleCreateCoin = async () => {
-    if (!scrapedData || !walletAddress) {
-      setError('Please provide wallet address and scrape a blog post first');
+    if (!scrapedData || !address || !isConnected || !walletClient || !publicClient) {
+      setError('Please connect your wallet and scrape a blog post first');
       return;
     }
 
@@ -109,31 +123,44 @@ export default function Home() {
       const { ipfsUri, ipfsHash, gatewayUrl, metadata } = await metadataResponse.json();
       console.log('IPFS upload successful:', { ipfsUri, ipfsHash });
 
-      // Step 2: Create coin with the IPFS metadata
-      const response = await fetch('/api/create-coin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          blogData: scrapedData,
-          walletAddress,
-          ipfsUri,
-          ipfsHash,
-          gatewayUrl,
-          metadata,
-        }),
+      // Step 2: Define coin parameters
+      const coinParams = {
+        name: scrapedData.title.substring(0, 50), // Truncate if too long
+        symbol: scrapedData.title.substring(0, 10).toUpperCase().replace(/[^A-Z]/g, ''), // Create symbol from title
+        uri: ipfsUri as ValidMetadataURI,
+        payoutRecipient: address as Address,
+        platformReferrer: address as Address, // Using same address for platform referrer
+        chainId: base.id,
+        currency: DeployCurrency.ZORA,
+      };
+
+
+      console.log('Creating coin with params:', coinParams);
+
+      // Step 3: Create the coin using wagmi clients
+      const result = await createCoin(coinParams, walletClient, publicClient, {
+        gasMultiplier: 120, // Add 20% buffer to gas
       });
 
-      const data = await response.json();
+      console.log("Transaction hash:", result.hash);
+      console.log("Coin address:", result.address);
+      console.log("Deployment details:", result.deployment);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create coin');
-      }
+      // Set the coin data for display
+      setCoinData({
+        coinAddress: result.address || 'N/A',
+        coinId: result.deployment?.coin || 'N/A',
+        tokenName: coinParams.name,
+        tokenSymbol: coinParams.symbol,
+        ipfsUri,
+        ipfsHash,
+        gatewayUrl,
+        coinParams,
+      });
 
-      setCoinData(data.coin);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create coin');
+      console.error('Error creating coin:', err);
     } finally {
       setIsLoading(false);
     }
@@ -160,7 +187,7 @@ export default function Home() {
               Blog URL & Wallet
             </CardTitle>
             <CardDescription>
-              Enter a blog post URL and your wallet address to get started
+              Enter a blog post URL and connect your wallet to get started
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -174,21 +201,40 @@ export default function Home() {
               />
             </div>
             
+            {/* Wallet Connection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Wallet Address</label>
-              <Input
-                placeholder="0x..."
-                value={walletAddress}
-                onChange={(e) => setWalletAddress(e.target.value)}
-                className="w-full"
-              />
+              <label className="text-sm font-medium">Wallet Connection</label>
+              {!authenticated ? (
+                <Button
+                  onClick={login}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Wallet className="mr-2 h-4 w-4" />
+                  Connect Wallet with Privy
+                </Button>
+              ) : (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-800">Wallet Connected</p>
+                      {address && (
+                        <p className="text-xs text-green-600 font-mono">
+                          {address.slice(0, 6)}...{address.slice(-4)}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      onClick={logout}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                {error}
-              </div>
-            )}
 
             <Button
               onClick={handleScrape}
@@ -293,7 +339,7 @@ export default function Home() {
 
               <Button
                 onClick={handleCreateCoin}
-                disabled={isLoading || !walletAddress}
+                disabled={isLoading || !authenticated || !isConnected}
                 className="w-full"
               >
                 {isLoading ? (
