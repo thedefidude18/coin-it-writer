@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pinata } from '@/lib/pinata';
-import { Metadata } from 'next';
 
 export async function POST(request: NextRequest) {
   try {

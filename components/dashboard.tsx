@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Loader2, Coins, TrendingUp, Users, User, Wallet, LogOut, Copy, Check, Search, Trash2, Edit } from 'lucide-react';
+import { Loader2, Coins, TrendingUp, Users, User, Wallet, LogOut, Copy, Check, Search, Trash2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { usePrivy, useLogout } from '@privy-io/react-auth';
 import CoinCreationModal from './coin-creation-modal';
@@ -26,7 +26,7 @@ import {
 
 export default function Dashboard() {
   const { address } = useAccount();
-  const { user, authenticated } = usePrivy();
+  const { user } = usePrivy();
   const { logout } = useLogout();
   const [userCoins, setUserCoins] = useState<CoinWithCreator[]>([]);
   const [allCoins, setAllCoins] = useState<CoinWithCreator[]>([]);
@@ -96,7 +96,7 @@ export default function Dashboard() {
     loadData();
   }, [address, user?.email?.address]);
 
-  const handleCoinCreated = async (newCoin: any) => {
+  const handleCoinCreated = async () => {
     // Refresh the data after a coin is created
     try {
       const [allCoinsData, userCoinsData, globalStats, userStats] = await Promise.all([
@@ -124,7 +124,7 @@ export default function Dashboard() {
       try {
         await deleteCoin(coinId);
         // Refresh the data after deletion
-        await handleCoinCreated(null);
+        await handleCoinCreated();
       } catch (error) {
         console.error('Error deleting coin:', error);
         alert('Failed to delete coin. Please try again.');
@@ -234,7 +234,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold">{stats.userCoins}</div>
               <p className="text-xs text-muted-foreground">
-                Coins you've created
+                Coins you&apos;ve created
               </p>
             </CardContent>
           </Card>
@@ -332,7 +332,7 @@ export default function Dashboard() {
                   <Search className="h-12 w-12 text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-600 mb-2">No coins found</h3>
                   <p className="text-gray-500 text-center mb-4">
-                    No coins match your search criteria: "{searchTerm}"
+                    No coins match your search criteria: &quot;{searchTerm}&quot;
                   </p>
                   <Button 
                     variant="outline" 
@@ -387,7 +387,7 @@ export default function Dashboard() {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <User className="h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-600 mb-2">You haven't created any coins yet</h3>
+                  <h3 className="text-lg font-medium text-gray-600 mb-2">You haven&apos;t created any coins yet</h3>
                   <p className="text-gray-500 text-center mb-4">
                     Start by creating your first coin from a blog post!
                   </p>

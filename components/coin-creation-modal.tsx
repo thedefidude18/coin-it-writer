@@ -14,6 +14,7 @@ import { base } from "viem/chains";
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { createCoin as createCoinInDb, createOrUpdateUser } from '@/lib/supabase-queries';
 import { usePrivy } from '@privy-io/react-auth';
+import Image from 'next/image';
 
 interface ScrapedData {
   url: string;
@@ -137,7 +138,7 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
         throw new Error(metadataError.error || 'Failed to upload metadata to IPFS');
       }
 
-      const { ipfsUri, ipfsHash, gatewayUrl, metadata } = await metadataResponse.json();
+      const { ipfsUri, ipfsHash, gatewayUrl } = await metadataResponse.json();
       console.log('IPFS upload successful:', { ipfsUri, ipfsHash });
 
       // Step 2: Define coin parameters using editable fields
@@ -300,6 +301,8 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
                   )}
                 </Button>
               </div>
+              
+        
             </CardContent>
           </Card>
 
@@ -355,9 +358,11 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Featured Image</label>
                     <div className="border rounded-md p-2">
-                      <img 
+                      <Image 
                         src={scrapedData.image} 
                         alt={scrapedData.title}
+                        width={500}
+                        height={192}
                         className="w-full h-48 object-cover rounded-md"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';

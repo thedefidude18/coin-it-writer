@@ -129,7 +129,7 @@ export default function Home() {
                       🎉 Ready to create coins!
                     </p>
                     <p className="text-xs text-green-600 mt-1">
-                      You'll be redirected to the dashboard shortly
+                      You&apos;ll be redirected to the dashboard shortly
                     </p>
                   </div>
                   <Button 

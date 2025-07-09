@@ -1,28 +1,25 @@
+// 
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ExternalLink, Calendar, User, Coins, Copy, Check, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { parseEther } from "viem";
 import {
   Account,
-  Address,
-  erc20Abi,
   WalletClient,
-  maxUint256,
-  Hex,
   PublicClient,
 } from "viem";
-import { getAccount } from '@wagmi/core'
-import { wagmiConfig } from '@/lib/wagmi'
 import {  useWallets, usePrivy } from "@privy-io/react-auth";
 import {  tradeCoin, TradeParameters } from "@zoralabs/coins-sdk";
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 
-export type GenericPublicClient = PublicClient<any, any, any, any>;
+export type GenericPublicClient = PublicClient;
 
 interface CoinCardProps {
   coin: {
@@ -50,6 +47,7 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ethAmount, setEthAmount] = useState("0.0001");
 
   const { wallets } = useWallets();
   const { ready } = usePrivy();
@@ -82,6 +80,12 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
       setError("Please log in with Privy first");
       return;
     }
+    
+    if (!ethAmount || parseFloat(ethAmount) <= 0) {
+      setError("Please enter a valid ETH amount");
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setTxHash(null);
@@ -89,7 +93,7 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
       const tradeParams: TradeParameters = {
         sell: { type: "eth" },
         buy: { type: "erc20", address: coinAddress as `0x${string}` },
-        amountIn: parseEther("0.0001"),
+        amountIn: parseEther(ethAmount),
         slippage: 0.05,
         sender: account.address as `0x${string}`,
       };
@@ -101,9 +105,9 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
         account: walletClient?.account as Account,
       });
       setTxHash(receipt.transactionHash);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.log(err)
-      setError(err.message || "Trade failed");
+      setError((err as Error).message || "Trade failed");
     } finally {
       setLoading(false);
     }
@@ -165,9 +169,12 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
 
             {coin.metadata.image && (
               <div className="rounded-md overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
                   src={coin.metadata.image} 
                   alt={coin.metadata.title || coin.name}
+                  width={500}
+                  height={128}
                   className="w-full h-32 object-cover"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
@@ -253,12 +260,30 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
                     </div>
                   </div>
 
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="ethAmount" className="text-sm font-medium">
+                        ETH Amount to Trade
+                      </Label>
+                      <Input
+                        id="ethAmount"
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        value={ethAmount}
+                        onChange={(e) => setEthAmount(e.target.value)}
+                        placeholder="Enter ETH amount"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <div className="text-sm font-medium mb-2">Trade Details</div>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">You pay:</span>
-                        <span>0.0001 ETH</span>
+                        <span>{ethAmount} ETH</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">You receive:</span>
@@ -271,6 +296,8 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
                     </div>
                   </div>
 
+              
+
                   {!ready || !wallets[0] ? (
                     <div className="p-4 bg-yellow-50 rounded-lg">
                       <p className="text-sm text-yellow-800">
@@ -280,10 +307,10 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
                   ) : (
                     <Button 
                       onClick={() => handleTrade(coin.address as `0x${string}`)}
-                      disabled={loading}
+                      disabled={loading || !ethAmount || parseFloat(ethAmount) <= 0}
                       className="w-full"
                     >
-                      {loading ? "Trading..." : "Trade 0.0001 ETH"}
+                      {loading ? "Trading..." : `Trade ${ethAmount} ETH`}
                     </Button>
                   )}
 

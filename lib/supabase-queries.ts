@@ -44,7 +44,7 @@ export interface CreateCoinData {
   ipfs_uri?: string;
   ipfs_hash?: string;
   gateway_url?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 // User functions
@@ -178,7 +178,7 @@ export async function getCoinStats() {
     .from('coins')
     .select('id', { count: 'exact' });
 
-  const { data: uniqueCreators, error: creatorsError } = await supabase
+  const { error: creatorsError } = await supabase
     .from('coins')
     .select('creator_wallet', { count: 'exact' });
 
@@ -188,7 +188,7 @@ export async function getCoinStats() {
   }
 
   // Get unique creators count
-  const { data: creatorData, error: creatorCountError } = await supabase
+  const { data: creatorData } = await supabase
     .from('coins')
     .select('creator_wallet')
     .then(({ data, error }) => {
