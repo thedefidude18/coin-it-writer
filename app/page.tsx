@@ -1,440 +1,200 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, ExternalLink, Coins, FileText, Calendar, User, Link as LinkIcon, Wallet } from 'lucide-react';
-import { createCoin, DeployCurrency, ValidMetadataURI } from "@zoralabs/coins-sdk";
-import { Hex, createWalletClient, createPublicClient, http, Address } from "viem";
-import { base } from "viem/chains";
+import { Loader2, Wallet, Coins, Users, TrendingUp, Sparkles } from 'lucide-react';
 import { usePrivy, useLogin, useLogout } from '@privy-io/react-auth';
-import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
-
-interface ScrapedData {
-  url: string;
-  title: string;
-  description: string;
-  author: string;
-  publishDate: string;
-  image: string;
-  content: string;
-  tags: string[];
-  scrapedAt: string;
-}
-
-interface CoinData {
-  coinAddress: string;
-  coinId: string;
-  tokenName: string;
-  tokenSymbol: string;
-  ipfsUri: string;
-  ipfsHash: string;
-  gatewayUrl: string;
-  coinParams: {
-    name: string;
-    symbol: string;
-    uri: string;
-    payoutRecipient: string;
-    platformReferrer: string;
-    chainId: number;
-  };
-}
+import { useAccount } from 'wagmi';
+import Dashboard from '@/components/dashboard';
 
 export default function Home() {
-  const [url, setUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
-  const [coinData, setCoinData] = useState<CoinData | null>(null);
-  const [error, setError] = useState('');
-  
   // Privy hooks
-  const { user, authenticated } = usePrivy();
+  const { user, authenticated, ready } = usePrivy();
   const { login } = useLogin();
   const { logout } = useLogout();
   
   // Wagmi hooks
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
-  const handleScrape = async () => {
-    if (!url) {
-      setError('Please enter a URL');
-      return;
-    }
+  // Show loading while Privy is initializing
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
 
-    setIsLoading(true);
-    setError('');
-    setScrapedData(null);
+  // If user is authenticated and wallet is connected, show dashboard
+  if (authenticated && isConnected && address) {
+    return <Dashboard />;
+  }
 
-    try {
-      const response = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to scrape content');
-      }
-
-      setScrapedData(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to scrape content');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCreateCoin = async () => {
-    if (!scrapedData || !address || !isConnected || !walletClient || !publicClient) {
-      setError('Please connect your wallet and scrape a blog post first');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      // Step 1: Upload metadata to IPFS first
-      console.log('Uploading metadata to IPFS...');
-      const metadataResponse = await fetch('/api/upload-metadata', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          blogData: scrapedData,
-        }),
-      });
-
-      if (!metadataResponse.ok) {
-        const metadataError = await metadataResponse.json();
-        throw new Error(metadataError.error || 'Failed to upload metadata to IPFS');
-      }
-
-      const { ipfsUri, ipfsHash, gatewayUrl, metadata } = await metadataResponse.json();
-      console.log('IPFS upload successful:', { ipfsUri, ipfsHash });
-
-      // Step 2: Define coin parameters
-      const coinParams = {
-        name: scrapedData.title.substring(0, 50), // Truncate if too long
-        symbol: scrapedData.title.substring(0, 10).toUpperCase().replace(/[^A-Z]/g, ''), // Create symbol from title
-        uri: ipfsUri as ValidMetadataURI,
-        payoutRecipient: address as Address,
-        platformReferrer: address as Address, // Using same address for platform referrer
-        chainId: base.id,
-        currency: DeployCurrency.ZORA,
-      };
-
-
-      console.log('Creating coin with params:', coinParams);
-
-      // Step 3: Create the coin using wagmi clients
-      const result = await createCoin(coinParams, walletClient, publicClient, {
-        gasMultiplier: 120, // Add 20% buffer to gas
-      });
-
-      console.log("Transaction hash:", result.hash);
-      console.log("Coin address:", result.address);
-      console.log("Deployment details:", result.deployment);
-
-      // Set the coin data for display
-      setCoinData({
-        coinAddress: result.address || 'N/A',
-        coinId: result.deployment?.coin || 'N/A',
-        tokenName: coinParams.name,
-        tokenSymbol: coinParams.symbol,
-        ipfsUri,
-        ipfsHash,
-        gatewayUrl,
-        coinParams,
-      });
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create coin');
-      console.error('Error creating coin:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Show login/connection page
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-            CoinIt Writer
-          </h1>
-          <p className="text-gray-600">
-            Scrape blog posts and create Zora coins from your favorite content
+        <div className="text-center space-y-4 mb-12 pt-20">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl">
+              <Coins className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              CoinIt Launchpad
+            </h1>
+          </div>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Transform your favorite blog posts into tradeable coins on Zora. Connect your wallet to get started.
           </p>
         </div>
 
-        {/* Input Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <LinkIcon className="h-5 w-5" />
-              Blog URL & Wallet
-            </CardTitle>
-            <CardDescription>
-              Enter a blog post URL and connect your wallet to get started
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Blog Post URL</label>
-              <Input
-                placeholder="https://medium.com/@author/article-title"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            
-            {/* Wallet Connection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Wallet Connection</label>
+        {/* Connection Status */}
+        <div className="max-w-md mx-auto space-y-6">
+          <Card className="border-2 border-dashed border-gray-300">
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center gap-2">
+                <Wallet className="h-6 w-6" />
+                Connect Your Wallet
+              </CardTitle>
+              <CardDescription>
+                You need to connect your wallet to create and view coins
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {!authenticated ? (
-                <Button
-                  onClick={login}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Connect Wallet with Privy
-                </Button>
+                <div className="text-center space-y-4">
+                  <p className="text-sm text-gray-500">
+                    Step 1: Authenticate with Privy
+                  </p>
+                  <Button 
+                    onClick={login}
+                    size="lg"
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  >
+                    <Wallet className="mr-2 h-5 w-5" />
+                    Connect Wallet
+                  </Button>
+                  <p className="text-xs text-gray-400">
+                    Connect via wallet or email to get started
+                  </p>
+                </div>
+              ) : !isConnected ? (
+                <div className="text-center space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-green-600">
+                    <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+                    <span className="text-sm font-medium">Authenticated</span>
+                  </div>
+                  {user?.email?.address && (
+                    <p className="text-xs text-gray-600">
+                      Logged in as: {user.email.address}
+                    </p>
+                  )}
+                  <p className="text-sm text-gray-500">
+                    Step 2: Connect your wallet to continue
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Please connect your wallet in your browser extension
+                  </p>
+                  <Button 
+                    onClick={logout}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    Sign out
+                  </Button>
+                </div>
               ) : (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-green-800">Wallet Connected</p>
-                      {address && (
-                        <p className="text-xs text-green-600 font-mono">
-                          {address.slice(0, 6)}...{address.slice(-4)}
-                        </p>
-                      )}
+                <div className="text-center space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center gap-2 text-green-600">
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+                      <span className="text-sm font-medium">Connected</span>
                     </div>
-                    <Button
-                      onClick={logout}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Disconnect
-                    </Button>
+                    {user?.email?.address && (
+                      <p className="text-xs text-gray-600">
+                        {user.email.address}
+                      </p>
+                    )}
+                    <p className="text-xs font-mono text-gray-500">
+                      {address?.slice(0, 6)}...{address?.slice(-4)}
+                    </p>
                   </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-sm text-green-700 font-medium">
+                      🎉 Ready to create coins!
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      You'll be redirected to the dashboard shortly
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={logout}
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                  >
+                    Disconnect
+                  </Button>
                 </div>
               )}
-            </div>
-
-            <Button
-              onClick={handleScrape}
-              disabled={isLoading || !url}
-              className="w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Scraping...
-                </>
-              ) : (
-                <>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Scrape Blog Post
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Scraped Content */}
-        {scrapedData && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Scraped Content
-              </CardTitle>
-              <CardDescription>
-                Blog post content extracted from {new URL(scrapedData.url).hostname}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg">{scrapedData.title}</h3>
-                {scrapedData.description && (
-                  <p className="text-gray-600">{scrapedData.description}</p>
-                )}
-              </div>
-
-              {scrapedData.image && (
-                <div className="relative h-48 bg-gray-100 rounded-lg overflow-hidden">
-                  <img
-                    src={scrapedData.image}
-                    alt={scrapedData.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                {scrapedData.author && (
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-600">Author:</span>
-                    <span>{scrapedData.author}</span>
-                  </div>
-                )}
-                {scrapedData.publishDate && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-600">Published:</span>
-                    <span>{new Date(scrapedData.publishDate).toLocaleDateString()}</span>
-                  </div>
-                )}
-              </div>
-
-              {scrapedData.tags.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-sm font-medium">Tags:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {scrapedData.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Content Preview:</label>
-                <Textarea
-                  value={scrapedData.content.substring(0, 500) + '...'}
-                  readOnly
-                  className="min-h-[100px] resize-none bg-gray-50"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <ExternalLink className="h-4 w-4 text-gray-500" />
-                <a
-                  href={scrapedData.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-sm"
-                >
-                  View Original Post
-                </a>
-              </div>
-
-              <Button
-                onClick={handleCreateCoin}
-                disabled={isLoading || !authenticated || !isConnected}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Coin...
-                  </>
-                ) : (
-                  <>
-                    <Coins className="mr-2 h-4 w-4" />
-                    Create Zora Coin
-                  </>
-                )}
-              </Button>
             </CardContent>
           </Card>
-        )}
 
-        {/* Coin Data */}
-        {coinData && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Coins className="h-5 w-5" />
-                Zora Coin Created
-              </CardTitle>
-              <CardDescription>
-                Your blog post has been successfully coined on Zora
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <span className="text-sm font-medium">Token Name:</span>
-                  <p className="text-gray-700">{coinData.tokenName}</p>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium">Symbol:</span>
-                  <p className="text-gray-700">{coinData.tokenSymbol}</p>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium">Coin Address:</span>
-                  <p className="text-gray-700 font-mono text-sm break-all">
-                    {coinData.coinAddress}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium">Coin ID:</span>
-                  <p className="text-gray-700 font-mono text-sm">
-                    {coinData.coinId}
-                  </p>
-                </div>
-              </div>
+          {/* Features Preview */}
+          <div className="grid grid-cols-1 gap-4 mt-8">
+            <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Sparkles className="h-5 w-5 text-purple-600" />
+                  Create Coins from Blogs
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Scrape any blog post and automatically create a tradeable coin with metadata stored on IPFS
+                </p>
+              </CardContent>
+            </Card>
 
-                             <div className="space-y-2">
-                 <span className="text-sm font-medium">IPFS Information:</span>
-                 <div className="bg-gray-50 p-4 rounded-lg">
-                   <p className="text-sm"><strong>IPFS URI:</strong> {coinData.ipfsUri}</p>
-                   <p className="text-sm mt-2"><strong>IPFS Hash:</strong> {coinData.ipfsHash}</p>
-                   <p className="text-sm mt-2"><strong>Gateway URL:</strong></p>
-                   <a 
-                     href={coinData.gatewayUrl} 
-                     target="_blank" 
-                     rel="noopener noreferrer"
-                     className="text-blue-600 hover:underline text-sm break-all"
-                   >
-                     {coinData.gatewayUrl}
-                   </a>
-                   <div className="mt-3 pt-3 border-t border-gray-200">
-                     <p className="text-sm font-medium mb-2">Coin Parameters:</p>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                       <div className="flex justify-between bg-white p-2 rounded text-sm">
-                         <span className="font-medium">Chain ID:</span>
-                         <span>{coinData.coinParams.chainId}</span>
-                       </div>
-                       <div className="flex justify-between bg-white p-2 rounded text-sm">
-                         <span className="font-medium">Payout Recipient:</span>
-                         <span className="font-mono text-xs">{coinData.coinParams.payoutRecipient.substring(0, 10)}...</span>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-               </div>
+            <Card className="bg-gradient-to-r from-blue-50 to-green-50 border-blue-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                  Discover & Trade
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Browse coins created by other users and discover interesting content from across the web
+                </p>
+              </CardContent>
+            </Card>
 
-                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                 <p className="text-green-700 text-sm">
-                   ✅ Successfully created Zora coin for "{scrapedData?.title}"
-                 </p>
-                 <p className="text-green-600 text-xs mt-1">
-                   📦 Metadata uploaded to IPFS: {coinData.ipfsHash}
-                 </p>
-               </div>
-            </CardContent>
-          </Card>
-        )}
+            <Card className="bg-gradient-to-r from-green-50 to-yellow-50 border-green-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Users className="h-5 w-5 text-green-600" />
+                  Join the Community
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Be part of a community that values quality content and supports creators through blockchain technology
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-16 text-sm text-gray-500">
+          <p>Powered by Zora Protocol • Built on Base</p>
+        </div>
       </div>
     </div>
   );
