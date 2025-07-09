@@ -1,6 +1,12 @@
-# CoinIt Writer
+# CoinIT
 
 A Next.js application that scrapes blog content and creates Zora coins from your favorite articles. Transform any blog post into a collectible digital asset on the Zora network.
+
+[Live Demo](https://coinit-alpha.vercel.app/)
+
+[Pitch Deck](https://drive.google.com/file/d/1JLsH3cT1lfOh2xPnBSgKvs5fLqvkkkBY/view)
+
+[Demo Video]()
 
 ## Features
 
