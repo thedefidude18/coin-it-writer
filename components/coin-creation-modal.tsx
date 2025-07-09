@@ -14,7 +14,6 @@ import { base } from "viem/chains";
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { createCoin as createCoinInDb, createOrUpdateUser } from '@/lib/supabase-queries';
 import { usePrivy } from '@privy-io/react-auth';
-import Image from 'next/image';
 
 interface ScrapedData {
   url: string;
@@ -55,7 +54,7 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
   const [isLoading, setIsLoading] = useState(false);
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
   const [coinData, setCoinData] = useState<CoinData | null>(null);
-  const [error, setError] = useState('');
+  const [, setError] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   
   // Editable fields for coin creation
@@ -248,7 +247,7 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
           Create New Coin
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Coins className="h-6 w-6" />
@@ -358,7 +357,8 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Featured Image</label>
                     <div className="border rounded-md p-2">
-                      <Image 
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
                         src={scrapedData.image} 
                         alt={scrapedData.title}
                         width={500}

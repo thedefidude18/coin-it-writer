@@ -1,4 +1,3 @@
-// 
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,7 +45,7 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [ethAmount, setEthAmount] = useState("0.0001");
 
   const { wallets } = useWallets();

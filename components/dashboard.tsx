@@ -218,6 +218,8 @@ export default function Dashboard() {
                 Logout
               </Button>
               </div>
+
+              <CoinCreationModal onCoinCreated={handleCoinCreated} />
               
               
             </div>
