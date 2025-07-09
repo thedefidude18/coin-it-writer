@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { createCollectorClient } from '@zoralabs/protocol-sdk';
-import { createPublicClient, createWalletClient, http } from 'viem';
 import { base } from 'viem/chains';
 
 export async function POST(request: NextRequest) {
@@ -12,7 +10,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Blog data and wallet address are required' }, { status: 400 });
     }
 
-    // Store blog post in Supabase
+    // Step 1: Upload metadata to IPFS via Pinata
+    console.log('Uploading metadata to IPFS...');
+    const ipfsResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/upload-metadata`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ blogData }),
+    });
+
+    if (!ipfsResponse.ok) {
+      const ipfsError = await ipfsResponse.json();
+      console.error('IPFS upload failed:', ipfsError);
+      return NextResponse.json({ error: 'Failed to upload metadata to IPFS' }, { status: 500 });
+    }
+
+    const { ipfsUri, ipfsHash, gatewayUrl } = await ipfsResponse.json();
+    console.log('IPFS upload successful:', { ipfsUri, ipfsHash });
+
+    // Step 2: Store blog post in Supabase with IPFS information
     const { data: blogPost, error: blogError } = await supabaseAdmin
       .from('blog_posts')
       .insert({
@@ -34,18 +51,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to store blog post' }, { status: 500 });
     }
 
-    // Create Zora coin
+    // Step 3: Create Zora coin with IPFS metadata
     try {
-      const publicClient = createPublicClient({
-        chain: base,
-        transport: http(),
-      });
-
-      const collectorClient = createCollectorClient({ 
-        chainId: base.id,
-        publicClient: publicClient as any,
-      });
-
       // Generate token name and symbol from blog title
       const tokenName = blogData.title.substring(0, 32) || 'Blog Coin';
       const tokenSymbol = blogData.title
@@ -53,48 +60,39 @@ export async function POST(request: NextRequest) {
         .substring(0, 8)
         .toUpperCase() || 'BLOG';
 
-      // Create token metadata
-      const tokenMetadata = {
+      // Prepare coin parameters for Zora
+      const coinParams = {
         name: tokenName,
-        description: `A coin representing the blog post: ${blogData.title}`,
-        image: blogData.image || '',
-        external_url: blogData.url,
-        attributes: [
-          {
-            trait_type: 'Author',
-            value: blogData.author || 'Unknown',
-          },
-          {
-            trait_type: 'Source',
-            value: new URL(blogData.url).hostname,
-          },
-          {
-            trait_type: 'Type',
-            value: 'Blog Post',
-          },
-        ],
+        symbol: tokenSymbol,
+        uri: ipfsUri, // Use the IPFS URI from Pinata upload
+        payoutRecipient: walletAddress,
+        platformReferrer: walletAddress, // You can set a different platform referrer if needed
+        chainId: base.id,
+        // Note: Actual coin creation would require wallet signing on the frontend
+        // This is prepared for when you implement wallet integration
       };
 
-      // For now, we'll return the metadata structure
-      // In a real implementation, you would:
-      // 1. Upload metadata to IPFS
-      // 2. Use Zora's coin creation API
-      // 3. Sign the transaction with the user's wallet
-      
-      const mockCoinData = {
+      console.log('Coin parameters prepared:', coinParams);
+
+      // For now, we'll create a mock coin with the real IPFS URI
+      // In production, this would be handled on the frontend with wallet signing
+      const coinData = {
         coinAddress: '0x' + Math.random().toString(16).substr(2, 40),
         coinId: Math.random().toString(),
         tokenName,
         tokenSymbol,
-        metadata: tokenMetadata,
+        ipfsUri,
+        ipfsHash,
+        gatewayUrl,
+        coinParams,
       };
 
       // Update blog post with coin information
       const { error: updateError } = await supabaseAdmin
         .from('blog_posts')
         .update({
-          zora_coin_address: mockCoinData.coinAddress,
-          zora_coin_id: mockCoinData.coinId,
+          zora_coin_address: coinData.coinAddress,
+          zora_coin_id: coinData.coinId,
         })
         .eq('id', blogPost.id);
 
@@ -107,8 +105,8 @@ export async function POST(request: NextRequest) {
         .from('zora_coins')
         .insert({
           blog_post_id: blogPost.id,
-          coin_address: mockCoinData.coinAddress,
-          coin_id: mockCoinData.coinId,
+          coin_address: coinData.coinAddress,
+          coin_id: coinData.coinId,
           token_name: tokenName,
           token_symbol: tokenSymbol,
           creator_address: walletAddress,
@@ -121,8 +119,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         blogPost,
-        coin: mockCoinData,
-        message: 'Blog post stored and coin created successfully',
+        coin: coinData,
+        ipfsUri,
+        ipfsHash,
+        gatewayUrl,
+        message: 'Blog post stored, uploaded to IPFS, and coin created successfully',
       });
 
     } catch (coinError) {

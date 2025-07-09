@@ -25,15 +25,16 @@ interface CoinData {
   coinId: string;
   tokenName: string;
   tokenSymbol: string;
-  metadata: {
+  ipfsUri: string;
+  ipfsHash: string;
+  gatewayUrl: string;
+  coinParams: {
     name: string;
-    description: string;
-    image: string;
-    external_url: string;
-    attributes: Array<{
-      trait_type: string;
-      value: string;
-    }>;
+    symbol: string;
+    uri: string;
+    payoutRecipient: string;
+    platformReferrer: string;
+    chainId: number;
   };
 }
 
@@ -322,27 +323,44 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <span className="text-sm font-medium">Metadata:</span>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm"><strong>Description:</strong> {coinData.metadata.description}</p>
-                  <p className="text-sm mt-2"><strong>Attributes:</strong></p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                    {coinData.metadata.attributes.map((attr, index) => (
-                      <div key={index} className="flex justify-between bg-white p-2 rounded text-sm">
-                        <span className="font-medium">{attr.trait_type}:</span>
-                        <span>{attr.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                             <div className="space-y-2">
+                 <span className="text-sm font-medium">IPFS Information:</span>
+                 <div className="bg-gray-50 p-4 rounded-lg">
+                   <p className="text-sm"><strong>IPFS URI:</strong> {coinData.ipfsUri}</p>
+                   <p className="text-sm mt-2"><strong>IPFS Hash:</strong> {coinData.ipfsHash}</p>
+                   <p className="text-sm mt-2"><strong>Gateway URL:</strong></p>
+                   <a 
+                     href={coinData.gatewayUrl} 
+                     target="_blank" 
+                     rel="noopener noreferrer"
+                     className="text-blue-600 hover:underline text-sm break-all"
+                   >
+                     {coinData.gatewayUrl}
+                   </a>
+                   <div className="mt-3 pt-3 border-t border-gray-200">
+                     <p className="text-sm font-medium mb-2">Coin Parameters:</p>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                       <div className="flex justify-between bg-white p-2 rounded text-sm">
+                         <span className="font-medium">Chain ID:</span>
+                         <span>{coinData.coinParams.chainId}</span>
+                       </div>
+                       <div className="flex justify-between bg-white p-2 rounded text-sm">
+                         <span className="font-medium">Payout Recipient:</span>
+                         <span className="font-mono text-xs">{coinData.coinParams.payoutRecipient.substring(0, 10)}...</span>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
 
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-green-700 text-sm">
-                  ✅ Successfully created Zora coin for "{scrapedData?.title}"
-                </p>
-              </div>
+                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                 <p className="text-green-700 text-sm">
+                   ✅ Successfully created Zora coin for "{scrapedData?.title}"
+                 </p>
+                 <p className="text-green-600 text-xs mt-1">
+                   📦 Metadata uploaded to IPFS: {coinData.ipfsHash}
+                 </p>
+               </div>
             </CardContent>
           </Card>
         )}
