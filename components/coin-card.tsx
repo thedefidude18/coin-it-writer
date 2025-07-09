@@ -3,8 +3,26 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Calendar, User, Coins, Copy, Check } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ExternalLink, Calendar, User, Coins, Copy, Check, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { parseEther } from "viem";
+import {
+  Account,
+  Address,
+  erc20Abi,
+  WalletClient,
+  maxUint256,
+  Hex,
+  PublicClient,
+} from "viem";
+import { getAccount } from '@wagmi/core'
+import { wagmiConfig } from '@/lib/wagmi'
+import {  useWallets, usePrivy } from "@privy-io/react-auth";
+import {  tradeCoin, TradeParameters } from "@zoralabs/coins-sdk";
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+
+export type GenericPublicClient = PublicClient<any, any, any, any>;
 
 interface CoinCardProps {
   coin: {
@@ -28,6 +46,18 @@ interface CoinCardProps {
 
 export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
   const [copied, setCopied] = useState(false);
+  const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const { wallets } = useWallets();
+  const { ready } = usePrivy();
+  
+  const account = useAccount()
+  // const account = getAccount(wagmiConfig)
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -45,6 +75,38 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const handleTrade = async (coinAddress: `0x${string}`) => {
+    if (!ready) {
+      setError("Please log in with Privy first");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setTxHash(null);
+    try {
+      const tradeParams: TradeParameters = {
+        sell: { type: "eth" },
+        buy: { type: "erc20", address: coinAddress as `0x${string}` },
+        amountIn: parseEther("0.0001"),
+        slippage: 0.05,
+        sender: account.address as `0x${string}`,
+      };
+
+      const receipt = await tradeCoin({
+        tradeParameters: tradeParams,
+        walletClient: walletClient as WalletClient,
+        publicClient: publicClient as GenericPublicClient,
+        account: walletClient?.account as Account,
+      });
+      setTxHash(receipt.transactionHash);
+    } catch (err: any) {
+      console.log(err)
+      setError(err.message || "Trade failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -153,6 +215,91 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
                 View Metadata
               </a>
             </Button>
+          )}
+
+          {!isOwnCoin && (
+            <Dialog open={tradeDialogOpen} onOpenChange={setTradeDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="default" size="sm" className="flex-1">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  Trade
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Trade {coin.symbol}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Coin Details</span>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Name:</span>
+                        <span>{coin.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Symbol:</span>
+                        <span>${coin.symbol}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Address:</span>
+                        <span className="font-mono text-xs">{formatAddress(coin.address)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="text-sm font-medium mb-2">Trade Details</div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">You pay:</span>
+                        <span>0.0001 ETH</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">You receive:</span>
+                        <span>${coin.symbol} tokens</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Slippage:</span>
+                        <span>5%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!ready || !wallets[0] ? (
+                    <div className="p-4 bg-yellow-50 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        Please log in with Privy to continue trading.
+                      </p>
+                    </div>
+                  ) : (
+                    <Button 
+                      onClick={() => handleTrade(coin.address as `0x${string}`)}
+                      disabled={loading}
+                      className="w-full"
+                    >
+                      {loading ? "Trading..." : "Trade 0.0001 ETH"}
+                    </Button>
+                  )}
+
+                  {txHash && (
+                    <div className="p-4 bg-green-50 rounded-lg">
+                      <p className="text-sm text-green-800">
+                        ✅ Transaction successful!
+                      </p>
+                      <p className="text-xs text-green-700 mt-1 font-mono break-all">
+                        {txHash}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           )}
         </div>
       </CardContent>
