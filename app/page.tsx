@@ -89,6 +89,27 @@ export default function Home() {
     setError('');
 
     try {
+      // Step 1: Upload metadata to IPFS first
+      console.log('Uploading metadata to IPFS...');
+      const metadataResponse = await fetch('/api/upload-metadata', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blogData: scrapedData,
+        }),
+      });
+
+      if (!metadataResponse.ok) {
+        const metadataError = await metadataResponse.json();
+        throw new Error(metadataError.error || 'Failed to upload metadata to IPFS');
+      }
+
+      const { ipfsUri, ipfsHash, gatewayUrl, metadata } = await metadataResponse.json();
+      console.log('IPFS upload successful:', { ipfsUri, ipfsHash });
+
+      // Step 2: Create coin with the IPFS metadata
       const response = await fetch('/api/create-coin', {
         method: 'POST',
         headers: {
@@ -97,6 +118,10 @@ export default function Home() {
         body: JSON.stringify({
           blogData: scrapedData,
           walletAddress,
+          ipfsUri,
+          ipfsHash,
+          gatewayUrl,
+          metadata,
         }),
       });
 

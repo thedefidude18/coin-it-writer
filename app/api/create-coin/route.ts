@@ -4,32 +4,15 @@ import { base } from 'viem/chains';
 
 export async function POST(request: NextRequest) {
   try {
-    const { blogData, walletAddress } = await request.json();
+    const { blogData, walletAddress, ipfsUri, ipfsHash, gatewayUrl, metadata } = await request.json();
 
-    if (!blogData || !walletAddress) {
-      return NextResponse.json({ error: 'Blog data and wallet address are required' }, { status: 400 });
+    if (!blogData || !walletAddress || !ipfsUri) {
+      return NextResponse.json({ error: 'Blog data, wallet address, and IPFS URI are required' }, { status: 400 });
     }
 
-    // Step 1: Upload metadata to IPFS via Pinata
-    console.log('Uploading metadata to IPFS...');
-    const ipfsResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/upload-metadata`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ blogData }),
-    });
+    console.log('Creating coin with IPFS metadata:', { ipfsUri, ipfsHash });
 
-    if (!ipfsResponse.ok) {
-      const ipfsError = await ipfsResponse.json();
-      console.error('IPFS upload failed:', ipfsError);
-      return NextResponse.json({ error: 'Failed to upload metadata to IPFS' }, { status: 500 });
-    }
-
-    const { ipfsUri, ipfsHash, gatewayUrl } = await ipfsResponse.json();
-    console.log('IPFS upload successful:', { ipfsUri, ipfsHash });
-
-    // Step 2: Store blog post in Supabase with IPFS information
+    // Step 1: Store blog post in Supabase with IPFS information
     const { data: blogPost, error: blogError } = await supabaseAdmin
       .from('blog_posts')
       .insert({
@@ -42,6 +25,8 @@ export async function POST(request: NextRequest) {
         content: blogData.content,
         tags: blogData.tags,
         scraped_at: blogData.scrapedAt,
+        ipfs_uri: ipfsUri,
+        ipfs_hash: ipfsHash,
       })
       .select()
       .single();
@@ -51,7 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to store blog post' }, { status: 500 });
     }
 
-    // Step 3: Create Zora coin with IPFS metadata
+    // Step 2: Create Zora coin with IPFS metadata
     try {
       // Generate token name and symbol from blog title
       const tokenName = blogData.title.substring(0, 32) || 'Blog Coin';
@@ -111,6 +96,8 @@ export async function POST(request: NextRequest) {
           token_symbol: tokenSymbol,
           creator_address: walletAddress,
           transaction_hash: '0x' + Math.random().toString(16).substr(2, 64),
+          ipfs_uri: ipfsUri,
+          ipfs_hash: ipfsHash,
         });
 
       if (coinError) {
@@ -123,7 +110,8 @@ export async function POST(request: NextRequest) {
         ipfsUri,
         ipfsHash,
         gatewayUrl,
-        message: 'Blog post stored, uploaded to IPFS, and coin created successfully',
+        metadata,
+        message: 'Blog post stored and coin created successfully with IPFS metadata',
       });
 
     } catch (coinError) {
