@@ -12,6 +12,8 @@ import { createCoin, DeployCurrency, ValidMetadataURI } from "@zoralabs/coins-sd
 import { Address } from "viem";
 import { base } from "viem/chains";
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
+import { createCoin as createCoinInDb, createOrUpdateUser } from '@/lib/supabase-queries';
+import { usePrivy } from '@privy-io/react-auth';
 
 interface ScrapedData {
   url: string;
@@ -63,6 +65,9 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  
+  // Privy hooks
+  const { user } = usePrivy();
 
   const handleScrape = async () => {
     if (!url) {
@@ -156,6 +161,40 @@ export default function CoinCreationModal({ onCoinCreated }: CoinCreationModalPr
       console.log("Transaction hash:", result.hash);
       console.log("Coin address:", result.address);
       console.log("Deployment details:", result.deployment);
+
+      // Step 4: Save coin to database
+      try {
+        // First, ensure user exists in database
+        await createOrUpdateUser(address, user?.email?.address);
+
+        // Create coin record in database
+        const coinDbData = {
+          creator_wallet: address,
+          name: coinParams.name,
+          symbol: coinParams.symbol,
+          coin_address: result.address || '',
+          transaction_hash: result.hash || '',
+          ipfs_uri: ipfsUri,
+          ipfs_hash: ipfsHash,
+          gateway_url: gatewayUrl,
+          metadata: {
+            title: scrapedData.title,
+            description: scrapedData.description,
+            image: scrapedData.image,
+            originalUrl: scrapedData.url,
+            author: scrapedData.author,
+            publishDate: scrapedData.publishDate,
+            tags: scrapedData.tags,
+            content: scrapedData.content,
+          },
+        };
+
+        await createCoinInDb(coinDbData);
+        console.log('Coin saved to database successfully');
+      } catch (dbError) {
+        console.error('Error saving coin to database:', dbError);
+        // Don't throw here - the coin was created successfully on-chain
+      }
 
       // Set the coin data for display
       const newCoinData = {

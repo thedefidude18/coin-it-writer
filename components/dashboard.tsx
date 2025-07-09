@@ -5,137 +5,145 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Coins, TrendingUp, Users, User, Wallet, LogOut, Copy, Check } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Coins, TrendingUp, Users, User, Wallet, LogOut, Copy, Check, Search, Trash2, Edit } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { usePrivy, useLogout } from '@privy-io/react-auth';
 import CoinCreationModal from './coin-creation-modal';
 import CoinCard from './coin-card';
-
-// Mock data - this will be replaced with Supabase data later
-const mockCoins = [
-  {
-    id: '1',
-    name: 'The Future of AI in Web Development',
-    symbol: 'FUTUAI',
-    address: '0x1234567890abcdef1234567890abcdef12345678',
-    creator: '0x1234567890abcdef1234567890abcdef12345678',
-    createdAt: '2024-01-15T10:30:00Z',
-    metadata: {
-      title: 'The Future of AI in Web Development: A Comprehensive Guide',
-      description: 'Exploring how artificial intelligence is revolutionizing the way we build and interact with web applications.',
-      image: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400',
-      originalUrl: 'https://medium.com/@techwriter/future-of-ai-web-dev',
-      author: 'TechWriter'
-    },
-    ipfsUri: 'ipfs://QmYourHashHere'
-  },
-  {
-    id: '2',
-    name: 'Blockchain Adoption in Enterprise',
-    symbol: 'BLKENT',
-    address: '0xabcdef1234567890abcdef1234567890abcdef12',
-    creator: '0xabcdef1234567890abcdef1234567890abcdef12',
-    createdAt: '2024-01-14T15:45:00Z',
-    metadata: {
-      title: 'How Fortune 500 Companies Are Adopting Blockchain Technology',
-      description: 'A detailed analysis of blockchain implementation strategies across major corporations.',
-      image: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400',
-      originalUrl: 'https://techcrunch.com/blockchain-enterprise',
-      author: 'CryptoAnalyst'
-    },
-    ipfsUri: 'ipfs://QmAnotherHashHere'
-  },
-  {
-    id: '3',
-    name: 'Web3 Design Principles',
-    symbol: 'WEB3DES',
-    address: '0x9876543210fedcba9876543210fedcba98765432',
-    creator: '0x1234567890abcdef1234567890abcdef12345678', // Same as first coin creator
-    createdAt: '2024-01-13T09:15:00Z',
-    metadata: {
-      title: 'Design Principles for Web3 Applications: UX Meets Decentralization',
-      description: 'Understanding how to create user-friendly interfaces for decentralized applications.',
-      image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?w=400',
-      originalUrl: 'https://uxdesign.cc/web3-principles',
-      author: 'DesignGuru'
-    },
-    ipfsUri: 'ipfs://QmYetAnotherHash'
-  }
-];
+import { 
+  getAllCoins, 
+  getUserCoins, 
+  getCoinStats, 
+  getUserCoinStats, 
+  createOrUpdateUser, 
+  getUser,
+  getCoinByAddress,
+  deleteCoin,
+  type CoinWithCreator,
+  type User as UserType 
+} from '@/lib/supabase-queries';
 
 export default function Dashboard() {
   const { address } = useAccount();
   const { user, authenticated } = usePrivy();
   const { logout } = useLogout();
-  const [userCoins, setUserCoins] = useState<typeof mockCoins>([]);
-  const [allCoins, setAllCoins] = useState<typeof mockCoins>([]);
+  const [userCoins, setUserCoins] = useState<CoinWithCreator[]>([]);
+  const [allCoins, setAllCoins] = useState<CoinWithCreator[]>([]);
+  const [filteredCoins, setFilteredCoins] = useState<CoinWithCreator[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [userProfile, setUserProfile] = useState<UserType | null>(null);
   const [stats, setStats] = useState({
     totalCoins: 0,
     userCoins: 0,
     totalCreators: 0
   });
 
-  // Mock data loading - replace with Supabase calls later
+  // Search functionality
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = allCoins.filter(coin => 
+        coin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        coin.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        coin.metadata.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        coin.metadata.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredCoins(filtered);
+    } else {
+      setFilteredCoins(allCoins);
+    }
+  }, [searchTerm, allCoins]);
+
+  // Load data from Supabase
   useEffect(() => {
     const loadData = async () => {
+      if (!address) return;
+      
       setIsLoading(true);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        // Ensure user exists in database and get user profile
+        await createOrUpdateUser(address, user?.email?.address);
+        const userProfile = await getUser(address);
+        setUserProfile(userProfile);
+        
+        // Load coins data in parallel
+        const [allCoinsData, userCoinsData, globalStats, userStats] = await Promise.all([
+          getAllCoins(50, 0),
+          getUserCoins(address, 50, 0),
+          getCoinStats(),
+          getUserCoinStats(address),
+        ]);
+        
+        setAllCoins(allCoinsData);
+        setFilteredCoins(allCoinsData);
+        setUserCoins(userCoinsData);
+        setStats({
+          totalCoins: globalStats.totalCoins,
+          userCoins: userStats.userCoins,
+          totalCreators: globalStats.totalCreators
+        });
+        
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [address, user?.email?.address]);
+
+  const handleCoinCreated = async (newCoin: any) => {
+    // Refresh the data after a coin is created
+    try {
+      const [allCoinsData, userCoinsData, globalStats, userStats] = await Promise.all([
+        getAllCoins(50, 0),
+        getUserCoins(address!, 50, 0),
+        getCoinStats(),
+        getUserCoinStats(address!),
+      ]);
       
-      // Filter coins by current user
-      const userCreatedCoins = mockCoins.filter(coin => 
-        coin.creator.toLowerCase() === address?.toLowerCase()
-      );
-      
-      setUserCoins(userCreatedCoins);
-      setAllCoins(mockCoins);
-      
-      // Calculate stats
-      const uniqueCreators = new Set(mockCoins.map(coin => coin.creator)).size;
+      setAllCoins(allCoinsData);
+      setFilteredCoins(allCoinsData);
+      setUserCoins(userCoinsData);
       setStats({
-        totalCoins: mockCoins.length,
-        userCoins: userCreatedCoins.length,
-        totalCreators: uniqueCreators
+        totalCoins: globalStats.totalCoins,
+        userCoins: userStats.userCoins,
+        totalCreators: globalStats.totalCreators
       });
-      
-      setIsLoading(false);
-    };
-
-    if (address) {
-      loadData();
+    } catch (error) {
+      console.error('Error refreshing dashboard data:', error);
     }
-  }, [address]);
+  };
 
-  const handleCoinCreated = (newCoin: any) => {
-    // This will be called when a new coin is created
-    // For now, we'll just add it to the mock data
-    const coinData = {
-      id: Date.now().toString(),
-      name: newCoin.tokenName,
-      symbol: newCoin.tokenSymbol,
-      address: newCoin.coinAddress,
-      creator: address!,
-      createdAt: new Date().toISOString(),
-      metadata: {
-        title: newCoin.tokenName,
-        description: 'Newly created coin',
-        image: '',
-        originalUrl: '',
-        author: ''
-      },
-      ipfsUri: newCoin.ipfsUri
-    };
-    
-    setUserCoins(prev => [coinData, ...prev]);
-    setAllCoins(prev => [coinData, ...prev]);
-    setStats(prev => ({
-      ...prev,
-      totalCoins: prev.totalCoins + 1,
-      userCoins: prev.userCoins + 1
-    }));
+  const handleDeleteCoin = async (coinId: string) => {
+    if (window.confirm('Are you sure you want to delete this coin? This action cannot be undone.')) {
+      try {
+        await deleteCoin(coinId);
+        // Refresh the data after deletion
+        await handleCoinCreated(null);
+      } catch (error) {
+        console.error('Error deleting coin:', error);
+        alert('Failed to delete coin. Please try again.');
+      }
+    }
+  };
+
+  const handleSearchCoin = async (coinAddress: string) => {
+    try {
+      const coin = await getCoinByAddress(coinAddress);
+      if (coin) {
+        setFilteredCoins([coin]);
+      } else {
+        alert('Coin not found');
+      }
+    } catch (error) {
+      console.error('Error searching for coin:', error);
+      alert('Error searching for coin');
+    }
   };
 
   const handleCopyAddress = async () => {
@@ -171,7 +179,7 @@ export default function Dashboard() {
               CoinIt Launchpad
             </h1>
             <p className="text-gray-600 mt-2">
-              Welcome back! Create and discover blog-to-coin transformations on Zora.
+              Welcome back{userProfile?.email ? `, ${userProfile.email}` : ''}! Create and discover blog-to-coin transformations on Zora.
             </p>
           </div>
           
@@ -274,7 +282,37 @@ export default function Dashboard() {
           <TabsContent value="all" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold">All Coins</h2>
-              <Badge variant="secondary">{allCoins.length} coins</Badge>
+              <Badge variant="secondary">{filteredCoins.length} coins</Badge>
+            </div>
+            
+            {/* Search functionality */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search coins by name, symbol, or content..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const address = prompt('Enter coin address to search:');
+                  if (address) handleSearchCoin(address);
+                }}
+              >
+                Search by Address
+              </Button>
+              {searchTerm && (
+                <Button
+                  variant="outline"
+                  onClick={() => setSearchTerm('')}
+                >
+                  Clear
+                </Button>
+              )}
             </div>
             
             {allCoins.length === 0 ? (
@@ -288,14 +326,52 @@ export default function Dashboard() {
                   <CoinCreationModal onCoinCreated={handleCoinCreated} />
                 </CardContent>
               </Card>
+            ) : filteredCoins.length === 0 && searchTerm ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Search className="h-12 w-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-600 mb-2">No coins found</h3>
+                  <p className="text-gray-500 text-center mb-4">
+                    No coins match your search criteria: "{searchTerm}"
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSearchTerm('')}
+                  >
+                    Clear Search
+                  </Button>
+                </CardContent>
+              </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {allCoins.map((coin) => (
-                  <CoinCard 
-                    key={coin.id} 
-                    coin={coin} 
-                    isOwnCoin={coin.creator.toLowerCase() === address?.toLowerCase()}
-                  />
+                {filteredCoins.map((coin) => (
+                  <div key={coin.id} className="relative">
+                    <CoinCard 
+                      coin={{
+                        id: coin.id,
+                        name: coin.name,
+                        symbol: coin.symbol,
+                        address: coin.coin_address,
+                        creator: coin.creator_wallet,
+                        createdAt: coin.created_at,
+                        metadata: coin.metadata,
+                        ipfsUri: coin.ipfs_uri,
+                      }}
+                      isOwnCoin={coin.creator_wallet.toLowerCase() === address?.toLowerCase()}
+                    />
+                    {coin.creator_wallet.toLowerCase() === address?.toLowerCase() && (
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleDeleteCoin(coin.id)}
+                          className="h-8 w-8 p-0 bg-red-500 hover:bg-red-600 text-white"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -321,11 +397,31 @@ export default function Dashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {userCoins.map((coin) => (
-                  <CoinCard 
-                    key={coin.id} 
-                    coin={coin} 
-                    isOwnCoin={true}
-                  />
+                  <div key={coin.id} className="relative">
+                    <CoinCard 
+                      coin={{
+                        id: coin.id,
+                        name: coin.name,
+                        symbol: coin.symbol,
+                        address: coin.coin_address,
+                        creator: coin.creator_wallet,
+                        createdAt: coin.created_at,
+                        metadata: coin.metadata,
+                        ipfsUri: coin.ipfs_uri,
+                      }}
+                      isOwnCoin={true}
+                    />
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleDeleteCoin(coin.id)}
+                        className="h-8 w-8 p-0 bg-red-500 hover:bg-red-600 text-white"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
