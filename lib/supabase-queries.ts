@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sendTelegramMessage, formatNewCoinMessage } from './telegram';
 
 export interface User {
   wallet_address: string;
@@ -95,6 +96,39 @@ export async function createCoin(coinData: CreateCoinData) {
     throw error;
   }
 
+  // Send Telegram message for new coin
+  try {
+    const coin = data as Coin;
+    // Prepare message data
+    const name = coin.name;
+    const symbol = coin.symbol;
+    const marketCap = '$0.00'; // Default, update if you have live data
+    const totalSupply = '1.00B'; // Default, update if you have live data
+    const creator = `${coin.creator_wallet.slice(0, 6)}...${coin.creator_wallet.slice(-4)} (https://zora.co/profile/${coin.creator_wallet})`;
+    const createdAt = new Date(coin.created_at).toISOString().replace('T', ' ').replace('Z', ' UTC');
+    const contract = `${coin.coin_address.slice(0, 6)}...${coin.coin_address.slice(-4)}`;
+    const description = coin.metadata?.description || '';
+    const zoraUrl = `https://zora.co/creator-coins/base:${coin.coin_address}`;
+    const baseScanUrl = `https://basescan.org/address/${coin.coin_address}`;
+    const dexScreenerUrl = `https://dexscreener.com/base/${coin.coin_address}`;
+    const message = formatNewCoinMessage({
+      name,
+      symbol,
+      marketCap,
+      totalSupply,
+      creator,
+      createdAt,
+      contract,
+      description,
+      zoraUrl,
+      baseScanUrl,
+      dexScreenerUrl,
+    });
+    await sendTelegramMessage(message, 'Markdown');
+  } catch (err) {
+    console.error('Failed to send Telegram message for new coin:', err);
+  }
+
   return data as Coin;
 }
 
@@ -172,6 +206,7 @@ export async function deleteCoin(coinId: string) {
   }
 }
 
+
 // Stats functions
 export async function getCoinStats() {
   const { data: totalCoins, error: totalError } = await supabase
@@ -201,6 +236,51 @@ export async function getCoinStats() {
     totalCoins: totalCoins?.length || 0,
     totalCreators: creatorData || 0,
   };
+}
+
+// Fetch all creators and their stats (coins created, etc)
+export async function getAllCreatorsWithStats() {
+  // Get all coins
+  const { data: coins, error } = await supabase
+    .from('coins')
+    .select('*');
+  if (error) {
+    console.error('Error fetching coins for creators:', error);
+    throw error;
+  }
+  // Group by creator_wallet
+  const creatorsMap = new Map();
+  for (const coin of coins) {
+    if (!creatorsMap.has(coin.creator_wallet)) {
+      creatorsMap.set(coin.creator_wallet, {
+        wallet: coin.creator_wallet,
+        coins: [],
+        coinsCreated: 0,
+        // Placeholder for user info
+        user: null,
+      });
+    }
+    const creator = creatorsMap.get(coin.creator_wallet);
+    creator.coins.push(coin);
+    creator.coinsCreated++;
+  }
+  // Fetch user info for each creator
+  const creatorWallets = Array.from(creatorsMap.keys());
+  if (creatorWallets.length > 0) {
+    const { data: users, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .in('wallet_address', creatorWallets);
+    if (!userError && users) {
+      for (const user of users) {
+        if (creatorsMap.has(user.wallet_address)) {
+          creatorsMap.get(user.wallet_address).user = user;
+        }
+      }
+    }
+  }
+  // Convert to array
+  return Array.from(creatorsMap.values());
 }
 
 export async function getUserCoinStats(walletAddress: string) {
