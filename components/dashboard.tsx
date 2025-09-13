@@ -59,33 +59,43 @@ export default function Dashboard() {
   // Load data from Supabase
   useEffect(() => {
     const loadData = async () => {
-      if (!address) return;
-      
       setIsLoading(true);
-      
       try {
-        // Ensure user exists in database and get user profile
-        await createOrUpdateUser(address, user?.email?.address);
-        const userProfile = await getUser(address);
-        setUserProfile(userProfile);
-        
-        // Load coins data in parallel
-        const [allCoinsData, userCoinsData, globalStats, userStats] = await Promise.all([
+        // Always load all coins and global stats
+        const [allCoinsData, globalStats] = await Promise.all([
           getAllCoins(50, 0),
-          getUserCoins(address, 50, 0),
           getCoinStats(),
-          getUserCoinStats(address),
         ]);
-        
         setAllCoins(allCoinsData);
         setFilteredCoins(allCoinsData);
-        setUserCoins(userCoinsData);
-        setStats({
+        setStats((prev) => ({
+          ...prev,
           totalCoins: globalStats.totalCoins,
-          userCoins: userStats.userCoins,
           totalCreators: globalStats.totalCreators
-        });
-        
+        }));
+
+        // Only load user-specific data if address is present
+        if (address) {
+          await createOrUpdateUser(address, user?.email?.address);
+          const userProfile = await getUser(address);
+          setUserProfile(userProfile);
+          const [userCoinsData, userStats] = await Promise.all([
+            getUserCoins(address, 50, 0),
+            getUserCoinStats(address),
+          ]);
+          setUserCoins(userCoinsData);
+          setStats((prev) => ({
+            ...prev,
+            userCoins: userStats.userCoins
+          }));
+        } else {
+          setUserCoins([]);
+          setUserProfile(null);
+          setStats((prev) => ({
+            ...prev,
+            userCoins: 0
+          }));
+        }
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {
@@ -174,15 +184,21 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex flex-col gap-2">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
               CoinIt Launchpad
             </h1>
-            <p className="text-gray-600 mt-2">
-              Welcome back{userProfile?.email ? `, ${userProfile.email}` : ''}! Create and discover blog-to-coin transformations on Zora.
-            </p>
+            <nav className="mt-2">
+              <ul className="flex gap-6 text-base font-medium">
+                <li><a href="/" className="hover:text-purple-700 transition-colors">Explore</a></li>
+                <li><a href="/creators" className="hover:text-purple-700 transition-colors">Creators</a></li>
+                <li><a href="/channels" className="hover:text-purple-700 transition-colors">Channels</a></li>
+                <li><a href="/leaderboard" className="hover:text-purple-700 transition-colors">Leaderboard</a></li>
+              </ul>
+            </nav>
+            {/* Notice removed: all users can now see the site without connecting their wallet */}
           </div>
-          
+
           <div className="flex items-center gap-4">
             {/* User Connection Status */}
             <div className="flex items-center gap-3">
@@ -227,43 +243,35 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Your Coins</CardTitle>
-              <User className="h-4 w-4 text-muted-foreground" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 my-2">
+          <Card className="p-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 px-2">
+              <CardTitle className="text-xs font-semibold">Your Coins</CardTitle>
+              <User className="h-3 w-3 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.userCoins}</div>
-              <p className="text-xs text-muted-foreground">
-                Coins you&apos;ve created
-              </p>
+            <CardContent className="py-1 px-2">
+              <div className="text-lg font-bold">{stats.userCoins}</div>
+              <p className="text-[10px] text-muted-foreground">Coins you&apos;ve created</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Coins</CardTitle>
-              <Coins className="h-4 w-4 text-muted-foreground" />
+          <Card className="p-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 px-2">
+              <CardTitle className="text-xs font-semibold">Total Coins</CardTitle>
+              <Coins className="h-3 w-3 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalCoins}</div>
-              <p className="text-xs text-muted-foreground">
-                Across all creators
-              </p>
+            <CardContent className="py-1 px-2">
+              <div className="text-lg font-bold">{stats.totalCoins}</div>
+              <p className="text-[10px] text-muted-foreground">Across all creators</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Creators</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+          <Card className="p-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 px-2">
+              <CardTitle className="text-xs font-semibold">Creators</CardTitle>
+              <Users className="h-3 w-3 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalCreators}</div>
-              <p className="text-xs text-muted-foreground">
-                Active on platform
-              </p>
+            <CardContent className="py-1 px-2">
+              <div className="text-lg font-bold">{stats.totalCreators}</div>
+              <p className="text-[10px] text-muted-foreground">Active on platform</p>
             </CardContent>
           </Card>
         </div>
@@ -323,7 +331,7 @@ export default function Dashboard() {
                   <Coins className="h-12 w-12 text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-600 mb-2">No coins yet</h3>
                   <p className="text-gray-500 text-center mb-4">
-                    Be the first to create a coin from a blog post!
+                    Create your coin and start earning!
                   </p>
                   <CoinCreationModal onCoinCreated={handleCoinCreated} />
                 </CardContent>

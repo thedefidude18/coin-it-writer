@@ -44,11 +44,11 @@ export default function Home() {
               <Coins className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              CoinIt Launchpad
+              CoinIt
             </h1>
           </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Transform your favorite blog posts into tradeable coins on Zora. Connect your wallet to get started.
+             Creators are FUN!!
           </p>
         </div>
 

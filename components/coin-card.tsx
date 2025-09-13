@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ExternalLink, Calendar, User, Coins, Copy, Check, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { parseEther } from "viem";
 import {
   Account,
@@ -16,6 +16,9 @@ import {
 } from "viem";
 import {  useWallets, usePrivy } from "@privy-io/react-auth";
 import {  tradeCoin, TradeParameters } from "@zoralabs/coins-sdk";
+
+
+
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 
 export type GenericPublicClient = PublicClient;
@@ -40,6 +43,7 @@ interface CoinCardProps {
   isOwnCoin?: boolean;
 }
 
+
 export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
   const [copied, setCopied] = useState(false);
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
@@ -47,14 +51,44 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [, setError] = useState<string | null>(null);
   const [ethAmount, setEthAmount] = useState("0.0001");
+  const [price, setPrice] = useState<string | null>(null);
+  const [marketCap, setMarketCap] = useState<string | null>(null);
+  const [volume24h, setVolume24h] = useState<string | null>(null);
+  const [uniqueHolders, setUniqueHolders] = useState<number | null>(null);
+  const [creatorEarnings, setCreatorEarnings] = useState<Array<{ amount: { currencyAddress: string; amountRaw: string; amountDecimal: number }; amountUsd?: string }> | null>(null);
 
   const { wallets } = useWallets();
   const { ready } = usePrivy();
-  
-  const account = useAccount()
-  // const account = getAccount(wagmiConfig)
+  const account = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchCoinStats() {
+      try {
+        const sdk = await import("@zoralabs/coins-sdk");
+        const setApiKey = sdk.setApiKey;
+        const getCoin = sdk.getCoin;
+        if (setApiKey && getCoin) {
+          setApiKey("zora_api_85edebb6a9cb7daa0d8124db4a60d946fb87127d5ab15897458a4c224de8c0bc");
+          const coinData = await getCoin({ address: coin.address });
+          const stats = coinData?.data?.zora20Token;
+          if (isMounted && stats) {
+            setPrice(stats.tokenPrice?.priceInUsdc ?? null);
+            setMarketCap(stats.marketCap ?? null);
+            setVolume24h(stats.volume24h ?? null);
+            setUniqueHolders(stats.uniqueHolders ?? null);
+            setCreatorEarnings(stats.creatorEarnings ?? null);
+          }
+        }
+      } catch (e) {
+        // Optionally handle error
+      }
+    }
+    if (typeof window !== "undefined") fetchCoinStats();
+    return () => { isMounted = false; };
+  }, [coin.address]);
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -79,12 +113,10 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
       setError("Please log in with Privy first");
       return;
     }
-    
     if (!ethAmount || parseFloat(ethAmount) <= 0) {
       setError("Please enter a valid ETH amount");
       return;
     }
-    
     setLoading(true);
     setError(null);
     setTxHash(null);
@@ -96,7 +128,6 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
         slippage: 0.05,
         sender: account.address as `0x${string}`,
       };
-
       const receipt = await tradeCoin({
         tradeParameters: tradeParams,
         walletClient: walletClient as WalletClient,
@@ -149,6 +180,48 @@ export default function CoinCard({ coin, isOwnCoin = false }: CoinCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Coin Stats */}
+        <div className="flex gap-4 text-xs text-gray-700 mb-2 flex-wrap">
+          <div>
+            <span className="block font-semibold">Symbol</span>
+            <span>{coin.symbol}</span>
+          </div>
+          <div>
+            <span className="block font-semibold">Price (USDC)</span>
+            <span>{price !== null ? `$${price}` : '--'}</span>
+          </div>
+          <div>
+            <span className="block font-semibold">Market Cap</span>
+            <span>{marketCap !== null ? `$${marketCap}` : '--'}</span>
+          </div>
+          <div>
+            <span className="block font-semibold">Volume 24h</span>
+            <span>{volume24h !== null ? `$${volume24h}` : '--'}</span>
+          </div>
+          <div>
+            <span className="block font-semibold">Unique Holders</span>
+            <span>{uniqueHolders !== null ? uniqueHolders : '--'}</span>
+          </div>
+          <div>
+            <span className="block font-semibold">Created At</span>
+            <span>{formatDate(coin.createdAt)}</span>
+          </div>
+        </div>
+        <div className="text-xs text-gray-700 mb-2">
+          <span className="block font-semibold">Creator Earnings</span>
+          {creatorEarnings && creatorEarnings.length > 0 ? (
+            <ul className="list-disc ml-4">
+              {creatorEarnings.map((earning, idx) => (
+                <li key={idx}>
+                  {earning.amount.amountDecimal} ({earning.amount.currencyAddress})
+                  {earning.amountUsd ? ` ≈ $${earning.amountUsd}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span>--</span>
+          )}
+        </div>
         {/* Blog Metadata */}
         {coin.metadata && (
           <div className="space-y-3">

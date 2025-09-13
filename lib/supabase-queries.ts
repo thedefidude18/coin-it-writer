@@ -100,7 +100,7 @@ export async function createCoin(coinData: CreateCoinData) {
 
 export async function getAllCoins(limit = 50, offset = 0) {
   const { data, error } = await supabase
-    .from('coins_with_creator')
+    .from('coins')
     .select('*')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -115,7 +115,7 @@ export async function getAllCoins(limit = 50, offset = 0) {
 
 export async function getUserCoins(walletAddress: string, limit = 50, offset = 0) {
   const { data, error } = await supabase
-    .from('coins_with_creator')
+    .from('coins')
     .select('*')
     .eq('creator_wallet', walletAddress)
     .order('created_at', { ascending: false })
@@ -131,7 +131,7 @@ export async function getUserCoins(walletAddress: string, limit = 50, offset = 0
 
 export async function getCoinByAddress(coinAddress: string) {
   const { data, error } = await supabase
-    .from('coins_with_creator')
+    .from('coins')
     .select('*')
     .eq('coin_address', coinAddress)
     .single();
